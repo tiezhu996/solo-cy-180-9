@@ -62,6 +62,15 @@ func (r *questionRepository) Update(question *model.Question) error {
 
 func (r *questionRepository) Delete(id uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		// 级联清理问题下录音的转写分段与转写稿。
+		recordingIDs := tx.Model(&model.Recording{}).Select("id").Where("question_id = ?", id)
+		transcriptIDs := tx.Model(&model.Transcript{}).Select("id").Where("recording_id IN (?)", recordingIDs)
+		if err := tx.Where("transcript_id IN (?)", transcriptIDs).Delete(&model.TranscriptSegment{}).Error; err != nil {
+			return fmt.Errorf("delete transcript segments of question %d: %w", id, err)
+		}
+		if err := tx.Where("recording_id IN (?)", recordingIDs).Delete(&model.Transcript{}).Error; err != nil {
+			return fmt.Errorf("delete transcripts of question %d: %w", id, err)
+		}
 		if err := tx.Where("question_id = ?", id).Delete(&model.Recording{}).Error; err != nil {
 			return fmt.Errorf("delete recordings of question %d: %w", id, err)
 		}

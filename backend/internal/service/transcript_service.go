@@ -77,7 +77,23 @@ func (s *transcriptService) checkTranscriptWritable(transcript *model.Transcript
 	return err
 }
 
+// checkEditor 在校验可写状态之上，限制采访员只能操作自己负责项目中的录音转写（管理员不受限）。
+func (s *transcriptService) checkEditor(actor *model.User, recordingID, projectID uint) error {
+	_, project, err := s.checkWritable(recordingID, projectID)
+	if err != nil {
+		return err
+	}
+	if actor.Role == constants.RoleInterviewer && project.CreatedBy != actor.ID {
+		return util.NewAppError(constants.CodeForbidden,
+			fmt.Sprintf("项目 %d 由其他采访员负责，%s 不能操作其中的录音转写", project.ID, actor.Username), nil)
+	}
+	return nil
+}
+
 func (s *transcriptService) CreateDraft(actor *model.User, req *dto.CreateTranscriptRequest) (*model.Transcript, error) {
+	if err := s.checkEditor(actor, req.RecordingID, req.ProjectID); err != nil {
+		return nil, err
+	}
 	recording, _, err := s.checkWritable(req.RecordingID, req.ProjectID)
 	if err != nil {
 		return nil, err
@@ -179,7 +195,7 @@ func (s *transcriptService) SaveSegments(actor *model.User, id uint, inputs []dt
 	if err != nil {
 		return nil, err
 	}
-	if err := s.checkTranscriptWritable(transcript); err != nil {
+	if err := s.checkEditor(actor, transcript.RecordingID, transcript.ProjectID); err != nil {
 		return nil, err
 	}
 	recording, err := s.recordingRepo.FindByID(transcript.RecordingID)
@@ -199,8 +215,13 @@ func (s *transcriptService) SaveSegments(actor *model.User, id uint, inputs []dt
 		if speaker == "" || content == "" {
 			return nil, util.NewAppError(constants.CodeValidation, fmt.Sprintf("第 %d 段说话人与内容不能为空", i+1), nil)
 		}
-		if in.StartSecond < 0 || in.EndSecond < in.StartSecond {
-			return nil, util.NewAppError(constants.CodeValidation, fmt.Sprintf("第 %d 段时间区间不合法", i+1), nil)
+		if in.StartSecond < 0 || in.EndSecond <= in.StartSecond {
+			return nil, util.NewAppError(constants.CodeValidation,
+				fmt.Sprintf("第 %d 段时间区间不合法：结束时间必须大于开始时间", i+1), nil)
+		}
+		if i > 0 && in.StartSecond < inputs[i-1].EndSecond {
+			return nil, util.NewAppError(constants.CodeValidation,
+				fmt.Sprintf("第 %d 段与第 %d 段时间重叠", i+1, i), nil)
 		}
 		if recording.DurationSeconds > 0 && in.EndSecond > recording.DurationSeconds {
 			return nil, util.NewAppError(constants.CodeValidation,
@@ -232,7 +253,7 @@ func (s *transcriptService) Submit(actor *model.User, id uint) (*model.Transcrip
 	if err != nil {
 		return nil, err
 	}
-	if err := s.checkTranscriptWritable(transcript); err != nil {
+	if err := s.checkEditor(actor, transcript.RecordingID, transcript.ProjectID); err != nil {
 		return nil, err
 	}
 	if err := s.transcriptRepo.Submit(id, actor.ID); err != nil {

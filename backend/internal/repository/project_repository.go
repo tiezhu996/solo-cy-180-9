@@ -105,6 +105,14 @@ func (r *projectRepository) UpdateStatus(project *model.Project) error {
 
 func (r *projectRepository) Delete(id uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		// 级联清理项目下的转写分段与转写稿，避免项目移除后转写仍可读取。
+		transcriptIDs := tx.Model(&model.Transcript{}).Select("id").Where("project_id = ?", id)
+		if err := tx.Where("transcript_id IN (?)", transcriptIDs).Delete(&model.TranscriptSegment{}).Error; err != nil {
+			return fmt.Errorf("delete transcript segments of project %d: %w", id, err)
+		}
+		if err := tx.Where("project_id = ?", id).Delete(&model.Transcript{}).Error; err != nil {
+			return fmt.Errorf("delete transcripts of project %d: %w", id, err)
+		}
 		if err := tx.Where("project_id = ?", id).Delete(&model.TimelineMarker{}).Error; err != nil {
 			return fmt.Errorf("delete markers of project %d: %w", id, err)
 		}

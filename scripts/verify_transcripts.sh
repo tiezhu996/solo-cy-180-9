@@ -204,6 +204,69 @@ check "P2 已归档" "$(req GET /projects/$P2 "$IV" >/dev/null; jq -r '.data.sta
 CODE=$(req POST /transcripts "$IV" "{\"recording_id\":$R2,\"project_id\":$P2}")
 check "归档项目创建草稿被拒" "$CODE" "409"
 
+say "8. 采访员只能操作自己负责项目的转写"
+req POST /auth/register "" '{"username":"iv2","password":"pass123456","display_name":"采访员二","role":"interviewer"}' >/dev/null
+IV2=$(login iv2 pass123456)
+R5=$(mkrec $P1 $Q1 1)
+CODE=$(req POST /transcripts "$IV2" "{\"recording_id\":$R5,\"project_id\":$P1}")
+check "他人项目录音建草稿被拒" "$CODE" "403"
+CODE=$(req POST /transcripts "$IV" "{\"recording_id\":$R5,\"project_id\":$P1}")
+check "项目负责人本人建草稿" "$CODE" "200"
+T5=$(jq '.data.id' /tmp/resp.json)
+CODE=$(req PUT /transcripts/$T5/segments "$IV2" '{"segments":[{"start_second":0,"end_second":10,"speaker":"x","content":"越权写入"}]}')
+check "他人保存分段被拒" "$CODE" "403"
+CODE=$(req POST /transcripts/$T5/submit "$IV2")
+check "他人提交审核被拒" "$CODE" "403"
+R6=$(mkrec $P1 $Q1 1)
+CODE=$(req POST /transcripts "$AD" "{\"recording_id\":$R6,\"project_id\":$P1}")
+check "管理员不受项目归属限制" "$CODE" "200"
+T6=$(jq '.data.id' /tmp/resp.json)
+CODE=$(req DELETE /recordings/$R6 "$IV")
+check "删除录音" "$CODE" "200"
+CODE=$(req GET /transcripts/$T6 "$AD")
+check "录音删除后其转写不可读取" "$CODE" "404"
+
+say "9. 分段时间校验（非零长度且不重叠）"
+CODE=$(req PUT /transcripts/$T5/segments "$IV" '{"segments":[{"start_second":5,"end_second":5,"speaker":"张老","content":"零长度分段"}]}')
+check "零长度分段被拒" "$CODE" "400"
+CODE=$(req PUT /transcripts/$T5/segments "$IV" '{"segments":[{"start_second":10,"end_second":5,"speaker":"张老","content":"负长度分段"}]}')
+check "负长度分段被拒" "$CODE" "400"
+CODE=$(req PUT /transcripts/$T5/segments "$IV" '{"segments":[
+  {"start_second":0,"end_second":50,"speaker":"张老","content":"第一段"},
+  {"start_second":40,"end_second":60,"speaker":"张老","content":"与第一段重叠"}]}')
+check "重叠分段被拒" "$CODE" "400"
+CODE=$(req PUT /transcripts/$T5/segments "$IV" '{"segments":[
+  {"start_second":0,"end_second":50,"speaker":"张老","content":"第一段"},
+  {"start_second":50,"end_second":120,"speaker":"采访员","content":"首尾相接不重叠"}]}')
+check "首尾相接分段允许" "$CODE" "200"
+
+say "10. 项目移除后转写与分段不再保留"
+req POST /projects "$IV" '{"title":"待删除项目","interviewee_name":"测试","birth_year":1960}' >/dev/null
+P3=$(jq '.data.id' /tmp/resp.json)
+req PUT /projects/$P3/status "$IV" '{"status":"in_progress"}' >/dev/null
+req POST /projects/$P3/questions "$IV" '{"content":"级联删除问题"}' >/dev/null
+Q3=$(jq '.data.id' /tmp/resp.json)
+R7=$(mkrec $P3 $Q3 1)
+CODE=$(req POST /transcripts "$IV" "{\"recording_id\":$R7,\"project_id\":$P3}")
+T7=$(jq '.data.id' /tmp/resp.json)
+req PUT /transcripts/$T7/segments "$IV" '{"segments":[{"start_second":0,"end_second":30,"speaker":"测试","content":"级联删除测试词"}]}' >/dev/null
+req POST /transcripts/$T7/submit "$IV" >/dev/null
+req GET /transcripts/$T7 "$IV" >/dev/null; SID7=$(jq '.data.segments[0].id' /tmp/resp.json)
+req POST /transcripts/$T7/segments/$SID7/confirm "$AR" >/dev/null
+req POST /transcripts/$T7/approve "$AR" >/dev/null
+req GET "/transcripts/search?q=级联删除测试词" "$IV" >/dev/null
+check "删除前检索命中" "$(jq '.data.list | length' /tmp/resp.json)" "1"
+CODE=$(req DELETE /projects/$P3 "$IV")
+check "删除项目" "$CODE" "200"
+CODE=$(req GET /transcripts/$T7 "$IV")
+check "项目删除后转写不可读取" "$CODE" "404"
+req GET "/transcripts?recording_id=$R7" "$IV" >/dev/null
+check "项目删除后版本列表为空" "$(jq '.data.list | length' /tmp/resp.json)" "0"
+req GET "/transcripts/search?q=级联删除测试词" "$IV" >/dev/null
+check "项目删除后检索不到分段" "$(jq '.data.list | length' /tmp/resp.json)" "0"
+CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/transcripts/$T7/export" -H "Authorization: Bearer $AR")
+check "项目删除后导出不可用" "$CODE" "404"
+
 say "结果汇总"
 echo -e "  \033[32m通过 $PASS\033[0m / \033[31m失败 $FAIL\033[0m"
 [ $FAIL -eq 0 ] && echo "  全部验证通过 ✅" || { echo "  存在失败项 ❌"; exit 1; }

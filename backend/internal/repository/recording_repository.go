@@ -92,6 +92,14 @@ func (r *recordingRepository) UpdateStatus(recording *model.Recording) error {
 
 func (r *recordingRepository) Delete(id uint) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		// 级联清理录音下的转写分段与转写稿。
+		transcriptIDs := tx.Model(&model.Transcript{}).Select("id").Where("recording_id = ?", id)
+		if err := tx.Where("transcript_id IN (?)", transcriptIDs).Delete(&model.TranscriptSegment{}).Error; err != nil {
+			return fmt.Errorf("delete transcript segments of recording %d: %w", id, err)
+		}
+		if err := tx.Where("recording_id = ?", id).Delete(&model.Transcript{}).Error; err != nil {
+			return fmt.Errorf("delete transcripts of recording %d: %w", id, err)
+		}
 		if err := tx.Where("recording_id = ?", id).Delete(&model.TimelineMarker{}).Error; err != nil {
 			return fmt.Errorf("delete markers of recording %d: %w", id, err)
 		}
