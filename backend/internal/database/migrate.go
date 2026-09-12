@@ -15,6 +15,8 @@ func Migrate(db *gorm.DB) error {
 		&model.Question{},
 		&model.Recording{},
 		&model.TimelineMarker{},
+		&model.Transcript{},
+		&model.TranscriptSegment{},
 		&model.AuditLog{},
 	); err != nil {
 		return fmt.Errorf("auto migrate: %w", err)

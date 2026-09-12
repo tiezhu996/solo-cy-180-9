@@ -26,6 +26,9 @@ export default function Layout() {
           <NavLink to="/interview" className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>
             采访工作台
           </NavLink>
+          <NavLink to="/transcripts" className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>
+            转写校对
+          </NavLink>
           {hasRole(ROLE_ADMIN) && (
             <NavLink to="/audit" className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>
               审计日志

@@ -101,6 +101,96 @@ paths:
   /timeline-markers/{id}:
     put: { summary: 更新时间轴节点, tags: [timeline], security: [{ BearerAuth: [] }] }
     delete: { summary: 删除时间轴节点, tags: [timeline], security: [{ BearerAuth: [] }] }
+  /transcripts:
+    get:
+      summary: 转写稿列表（project_id / recording_id / status 过滤）
+      tags: [transcripts]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: project_id, in: query, schema: { type: integer } }
+        - { name: recording_id, in: query, schema: { type: integer } }
+        - { name: status, in: query, schema: { type: string, enum: [draft, submitted, approved, rejected] } }
+    post:
+      summary: 为已就绪录音创建转写草稿（采访员；已通过内容再次修改时生成新版本并保留旧版）
+      tags: [transcripts]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recording_id, project_id]
+              properties:
+                recording_id: { type: integer }
+                project_id: { type: integer }
+      responses:
+        '200': { description: 草稿创建成功 }
+        '403': { description: 跨项目写入或无权限 }
+        '409': { description: 录音未就绪 / 项目已归档 / 已有进行中的转写稿 }
+  /transcripts/search:
+    get:
+      summary: 检索已通过转写全文（仅每个录音最新已通过版本）
+      tags: [transcripts]
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: project_id, in: query, schema: { type: integer } }
+  /transcripts/{id}:
+    get: { summary: 转写稿详情（含分段）, tags: [transcripts], security: [{ BearerAuth: [] }] }
+  /transcripts/{id}/segments:
+    put:
+      summary: 批量保存草稿分段（采访员，整体替换；按时间轴记录说话人与内容）
+      tags: [transcripts]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                segments:
+                  type: array
+                  items:
+                    type: object
+                    required: [speaker, content]
+                    properties:
+                      start_second: { type: integer }
+                      end_second: { type: integer }
+                      speaker: { type: string }
+                      content: { type: string }
+      responses:
+        '200': { description: 保存成功 }
+        '409': { description: 状态不允许编辑（并发修改/已提交） }
+  /transcripts/{id}/submit:
+    post: { summary: 提交审核（采访员）, tags: [transcripts], security: [{ BearerAuth: [] }] }
+  /transcripts/{id}/segments/{segmentId}/confirm:
+    post: { summary: 逐段确认（档案员）, tags: [transcripts], security: [{ BearerAuth: [] }] }
+  /transcripts/{id}/approve:
+    post:
+      summary: 整篇通过（档案员，需全部分段已确认）
+      tags: [transcripts]
+      security: [{ BearerAuth: [] }]
+  /transcripts/{id}/reject:
+    post:
+      summary: 整篇退回（档案员，必须写明问题）
+      tags: [transcripts]
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 512 }
+  /transcripts/{id}/export:
+    get:
+      summary: 导出已通过转写稿全文（text/plain）
+      tags: [transcripts]
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200': { description: 纯文本全文 }
+        '409': { description: 未审核通过不能导出 }
   /audit-logs:
     get:
       summary: 审计日志列表（仅管理员）

@@ -731,3 +731,38 @@ code {
   border-radius: 4px;
   font-size: 12px;
 }
+
+/* 转写校对模块 */
+.segment-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+.segment-index {
+  min-width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+}
+.segment-time { width: 90px; }
+.segment-speaker { width: 120px; }
+.segment-content { flex: 1; resize: vertical; }
+.segment-range { min-width: 110px; color: #6b7280; font-size: 13px; margin-top: 4px; }
+.segment-speaker-view { min-width: 90px; font-weight: 600; margin-top: 4px; }
+.segment-content-view { flex: 1; white-space: pre-wrap; margin-top: 4px; }
+.reject-comment {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #991b1b;
+}

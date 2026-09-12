@@ -17,6 +17,7 @@ const (
 	CodeProjectStatus   = 40902 // 项目状态流转非法
 	CodeRecordingStatus = 40903 // 录音状态流转非法
 	CodeMarkerConflict  = 40904 // 时间轴节点冲突
+	CodeTranscriptState = 40905 // 转写稿状态冲突
 )
 
 // 错误码对应的默认文案。
@@ -35,6 +36,7 @@ var errorMessages = map[int]string{
 	CodeProjectStatus:   "project status transition not allowed",
 	CodeRecordingStatus: "recording status transition not allowed",
 	CodeMarkerConflict:  "timeline marker conflict",
+	CodeTranscriptState: "transcript status conflict",
 }
 
 // Message 返回错误码对应的默认文案。

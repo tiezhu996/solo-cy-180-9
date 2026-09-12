@@ -36,6 +36,8 @@ func New(cfg *config.Config, logger *slog.Logger) (*gorm.DB, error) {
 		&model.Question{},
 		&model.Recording{},
 		&model.TimelineMarker{},
+		&model.Transcript{},
+		&model.TranscriptSegment{},
 		&model.AuditLog{},
 	); err != nil {
 		return nil, fmt.Errorf("auto migrate: %w", err)

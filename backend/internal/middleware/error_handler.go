@@ -41,7 +41,7 @@ func statusOf(code int) int {
 		return http.StatusForbidden
 	case constants.CodeNotFound:
 		return http.StatusNotFound
-	case constants.CodeConflict, constants.CodeDuplicateName, constants.CodeProjectStatus, constants.CodeRecordingStatus, constants.CodeMarkerConflict:
+	case constants.CodeConflict, constants.CodeDuplicateName, constants.CodeProjectStatus, constants.CodeRecordingStatus, constants.CodeMarkerConflict, constants.CodeTranscriptState:
 		return http.StatusConflict
 	case constants.CodeRateLimited:
 		return http.StatusTooManyRequests

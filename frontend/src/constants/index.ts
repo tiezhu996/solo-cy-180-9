@@ -50,6 +50,24 @@ export const RECORDING_STATUS_TEXT: Record<string, string> = {
   [RECORDING_STATUS_FAILED]: '失败',
 }
 
+// 转写稿状态机枚举（与后端 constants/transcript_status.go 同步）
+export const TRANSCRIPT_STATUS_DRAFT = 'draft'
+export const TRANSCRIPT_STATUS_SUBMITTED = 'submitted'
+export const TRANSCRIPT_STATUS_APPROVED = 'approved'
+export const TRANSCRIPT_STATUS_REJECTED = 'rejected'
+
+export const TRANSCRIPT_STATUS_TEXT: Record<string, string> = {
+  [TRANSCRIPT_STATUS_DRAFT]: '草稿',
+  [TRANSCRIPT_STATUS_SUBMITTED]: '待审核',
+  [TRANSCRIPT_STATUS_APPROVED]: '已通过',
+  [TRANSCRIPT_STATUS_REJECTED]: '已退回',
+}
+
+export const TRANSCRIPT_SEGMENT_STATUS_TEXT: Record<string, string> = {
+  pending: '待确认',
+  confirmed: '已确认',
+}
+
 // 错误码（与后端 constants/error_codes.go 同步）
 export const ERROR_CODES = {
   OK: 0,

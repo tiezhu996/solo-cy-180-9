@@ -196,6 +196,13 @@ function TimelineItem({
           <span className="timeline-duration">{formatDuration(recording.duration_seconds)}</span>
         </div>
         <AudioPlayer recordingId={recording.id} durationSeconds={recording.duration_seconds} />
+        {recording.status === 'ready' && (
+          <div className="row-actions" style={{ marginTop: 8 }}>
+            <a className="btn btn-plain btn-small" href={`#/transcripts?recording_id=${recording.id}`}>
+              转写校对
+            </a>
+          </div>
+        )}
         <div className="timeline-summary">
           <span className="summary-label">一句话摘要：</span>
           {recording.summary || <span className="muted">暂无摘要</span>}

@@ -6,6 +6,8 @@ import InterviewPage from '../pages/interview/InterviewPage'
 import LoginPage from '../pages/login/LoginPage'
 import ProjectDetailPage from '../pages/projects/ProjectDetailPage'
 import ProjectListPage from '../pages/projects/ProjectListPage'
+import TranscriptDetailPage from '../pages/transcripts/TranscriptDetailPage'
+import TranscriptListPage from '../pages/transcripts/TranscriptListPage'
 
 export const router = createHashRouter([
   { path: '/login', element: <LoginPage /> },
@@ -16,6 +18,8 @@ export const router = createHashRouter([
       { index: true, element: <ProjectListPage /> },
       { path: 'projects/:id', element: <ProjectDetailPage /> },
       { path: 'interview', element: <InterviewPage /> },
+      { path: 'transcripts', element: <TranscriptListPage /> },
+      { path: 'transcripts/:id', element: <TranscriptDetailPage /> },
       { path: 'audit', element: <AuditPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
