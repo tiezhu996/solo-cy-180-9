@@ -48,11 +48,16 @@ func (h *TranscriptHandler) Create(c *gin.Context) {
 
 // Get 查询转写稿详情（含分段）。
 func (h *TranscriptHandler) Get(c *gin.Context) {
+	actor, err := middleware.CurrentUser(c)
+	if err != nil {
+		c.Error(err)
+		return
+	}
 	id, ok := parseID(c, "id")
 	if !ok {
 		return
 	}
-	transcript, err := h.transcriptSvc.Get(id)
+	transcript, err := h.transcriptSvc.Get(actor, id)
 	if err != nil {
 		c.Error(err)
 		return
@@ -62,11 +67,16 @@ func (h *TranscriptHandler) Get(c *gin.Context) {
 
 // List 转写稿列表（支持 project_id / recording_id / status 过滤）。
 func (h *TranscriptHandler) List(c *gin.Context) {
+	actor, err := middleware.CurrentUser(c)
+	if err != nil {
+		c.Error(err)
+		return
+	}
 	var query dto.ListTranscriptQuery
 	if !bindQuery(c, &query) {
 		return
 	}
-	transcripts, err := h.transcriptSvc.List(query.ProjectID, query.RecordingID, query.Status)
+	transcripts, err := h.transcriptSvc.List(actor, query.ProjectID, query.RecordingID, query.Status)
 	if err != nil {
 		c.Error(err)
 		return

@@ -16,6 +16,7 @@ type ProjectRepository interface {
 	List(page, pageSize int, status string) ([]model.Project, int64, error)
 	ListByUser(userID uint, page, pageSize int) ([]model.Project, int64, error)
 	FindByIDForUpdate(id uint) (*model.Project, error)
+	ListIDsByCreator(userID uint) ([]uint, error)
 	Update(project *model.Project) error
 	UpdateStatus(project *model.Project) error
 	Delete(id uint) error
@@ -87,6 +88,14 @@ func (r *projectRepository) FindByIDForUpdate(id uint) (*model.Project, error) {
 		return nil, fmt.Errorf("find project for update: %w", err)
 	}
 	return &project, nil
+}
+
+func (r *projectRepository) ListIDsByCreator(userID uint) ([]uint, error) {
+	var ids []uint
+	if err := r.db.Model(&model.Project{}).Where("created_by = ?", userID).Pluck("id", &ids).Error; err != nil {
+		return nil, fmt.Errorf("list project ids by user %d: %w", userID, err)
+	}
+	return ids, nil
 }
 
 func (r *projectRepository) Update(project *model.Project) error {

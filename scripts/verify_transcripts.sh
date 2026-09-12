@@ -267,6 +267,45 @@ check "项目删除后检索不到分段" "$(jq '.data.list | length' /tmp/resp.
 CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/transcripts/$T7/export" -H "Authorization: Bearer $AR")
 check "项目删除后导出不可用" "$CODE" "404"
 
+say "11. 转写查看权限（采访员仅见自己负责项目）"
+CODE=$(req GET /transcripts/$T1 "$IV2")
+check "他人查看转写详情被拒" "$CODE" "403"
+CODE=$(req GET "/transcripts?recording_id=$R1" "$IV2")
+check "他人按录音列版本被拒" "$CODE" "403"
+CODE=$(req GET "/transcripts?project_id=$P1" "$IV2")
+check "他人按项目列转写被拒" "$CODE" "403"
+# iv2 自己负责的项目与转写
+req POST /projects "$IV2" '{"title":"iv2的项目","interviewee_name":"王阿姨","birth_year":1945}' >/dev/null
+P4=$(jq '.data.id' /tmp/resp.json)
+req PUT /projects/$P4/status "$IV2" '{"status":"in_progress"}' >/dev/null
+req POST /projects/$P4/questions "$IV2" '{"content":"说说您的工作经历"}' >/dev/null
+Q4=$(jq '.data.id' /tmp/resp.json)
+req POST /recordings "$IV2" "{\"project_id\":$P4,\"question_id\":$Q4,\"duration_seconds\":60}" >/dev/null
+R8=$(jq '.data.id' /tmp/resp.json)
+curl -s -o /dev/null -X POST "$BASE/recordings/$R8/audio" -H "Authorization: Bearer $IV2" -F "file=@/tmp/a.webm" -F "duration_seconds=60"
+CODE=$(req POST /transcripts "$IV2" "{\"recording_id\":$R8,\"project_id\":$P4}")
+T8=$(jq '.data.id' /tmp/resp.json)
+check "iv2 自己项目建草稿" "$CODE" "200"
+req GET /transcripts "$IV2" >/dev/null
+check "iv2 列表包含自己转写" "$(jq "[.data.list[].id] | contains([$T8])" /tmp/resp.json)" "true"
+check "iv2 列表不含他人转写" "$(jq "[.data.list[].id] | contains([$T1])" /tmp/resp.json)" "false"
+req GET /transcripts "$IV" >/dev/null
+check "iv1 列表不含 iv2 转写" "$(jq "[.data.list[].id] | contains([$T8])" /tmp/resp.json)" "false"
+CODE=$(req GET /transcripts/$T1 "$IV")
+check "项目负责人查看自己转写" "$CODE" "200"
+CODE=$(req GET "/transcripts?recording_id=$R1" "$IV")
+check "项目负责人按录音列版本" "$CODE" "200"
+CODE=$(req GET /transcripts/$T1 "$AR")
+check "档案员按职责查看详情" "$CODE" "200"
+CODE=$(req GET "/transcripts?project_id=$P1" "$AR")
+check "档案员按职责查看列表" "$CODE" "200"
+CODE=$(req GET /transcripts/$T1 "$AD")
+check "管理员查看详情" "$CODE" "200"
+req GET "/transcripts/search?q=村口&project_id=$P1" "$IV2" >/dev/null
+check "他人仍可检索已通过内容" "$(jq '.data.list | length' /tmp/resp.json)" "1"
+CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/transcripts/$T2/export" -H "Authorization: Bearer $IV2")
+check "他人仍可导出已通过版本" "$CODE" "200"
+
 say "结果汇总"
 echo -e "  \033[32m通过 $PASS\033[0m / \033[31m失败 $FAIL\033[0m"
 [ $FAIL -eq 0 ] && echo "  全部验证通过 ✅" || { echo "  存在失败项 ❌"; exit 1; }

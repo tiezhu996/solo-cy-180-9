@@ -53,6 +53,9 @@ func (f *fakeProjectRepo) UpdateStatus(project *model.Project) error {
 	return f.Update(project)
 }
 func (f *fakeProjectRepo) Delete(id uint) error { return nil }
+func (f *fakeProjectRepo) ListIDsByCreator(userID uint) ([]uint, error) {
+	return nil, nil
+}
 func (f *fakeProjectRepo) Count() (int64, error) { return 0, nil }
 
 func TestProjectServiceTransitionStatus(t *testing.T) {

@@ -17,8 +17,8 @@ import (
 // TranscriptService 转写校对业务接口。
 type TranscriptService interface {
 	CreateDraft(actor *model.User, req *dto.CreateTranscriptRequest) (*model.Transcript, error)
-	Get(id uint) (*model.Transcript, error)
-	List(projectID uint, recordingID uint, status string) ([]model.Transcript, error)
+	Get(actor *model.User, id uint) (*model.Transcript, error)
+	List(actor *model.User, projectID uint, recordingID uint, status string) ([]model.Transcript, error)
 	SaveSegments(actor *model.User, id uint, inputs []dto.TranscriptSegmentInput) (*model.Transcript, error)
 	Submit(actor *model.User, id uint) (*model.Transcript, error)
 	ConfirmSegment(actor *model.User, id, segmentID uint) (*model.Transcript, error)
@@ -161,7 +161,8 @@ func (s *transcriptService) CreateDraft(actor *model.User, req *dto.CreateTransc
 	return s.transcriptRepo.FindByIDWithSegments(transcript.ID)
 }
 
-func (s *transcriptService) Get(id uint) (*model.Transcript, error) {
+// get 内部查询，不做读取权限校验（写操作与导出另有各自的权限控制）。
+func (s *transcriptService) get(id uint) (*model.Transcript, error) {
 	transcript, err := s.transcriptRepo.FindByIDWithSegments(id)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -172,26 +173,89 @@ func (s *transcriptService) Get(id uint) (*model.Transcript, error) {
 	return transcript, nil
 }
 
-func (s *transcriptService) List(projectID uint, recordingID uint, status string) ([]model.Transcript, error) {
+// checkViewer 校验读取权限：采访员只能查看自己负责项目的转写，档案员与管理员可按职责查看。
+func (s *transcriptService) checkViewer(actor *model.User, projectID uint) error {
+	if actor.Role != constants.RoleInterviewer {
+		return nil
+	}
+	project, err := s.projectRepo.FindByID(projectID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return util.NewAppError(constants.CodeNotFound, fmt.Sprintf("项目 %d 不存在", projectID), err)
+		}
+		return util.NewAppError(constants.CodeInternal, fmt.Sprintf("查询项目 %d 失败", projectID), err)
+	}
+	if project.CreatedBy != actor.ID {
+		return util.NewAppError(constants.CodeForbidden,
+			fmt.Sprintf("项目 %d 由其他采访员负责，%s 不能查看其中的转写", projectID, actor.Username), nil)
+	}
+	return nil
+}
+
+func (s *transcriptService) Get(actor *model.User, id uint) (*model.Transcript, error) {
+	transcript, err := s.get(id)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.checkViewer(actor, transcript.ProjectID); err != nil {
+		return nil, err
+	}
+	return transcript, nil
+}
+
+func (s *transcriptService) List(actor *model.User, projectID uint, recordingID uint, status string) ([]model.Transcript, error) {
 	if status != "" && !constants.ValidTranscriptStatus(status) {
 		return nil, util.NewAppError(constants.CodeValidation, fmt.Sprintf("转写稿状态 %s 不合法", status), nil)
 	}
 	if recordingID > 0 {
+		recording, err := s.recordingRepo.FindByID(recordingID)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return nil, util.NewAppError(constants.CodeNotFound, fmt.Sprintf("录音 %d 不存在", recordingID), err)
+			}
+			return nil, util.NewAppError(constants.CodeInternal, fmt.Sprintf("查询录音 %d 失败", recordingID), err)
+		}
+		if err := s.checkViewer(actor, recording.ProjectID); err != nil {
+			return nil, err
+		}
 		transcripts, err := s.transcriptRepo.ListByRecording(recordingID)
 		if err != nil {
 			return nil, util.NewAppError(constants.CodeInternal, "转写版本列表查询失败", err)
 		}
 		return transcripts, nil
 	}
+	if projectID > 0 {
+		if err := s.checkViewer(actor, projectID); err != nil {
+			return nil, err
+		}
+	}
 	transcripts, err := s.transcriptRepo.List(projectID, status)
 	if err != nil {
 		return nil, util.NewAppError(constants.CodeInternal, "转写稿列表查询失败", err)
+	}
+	// 采访员不带项目过滤查询时，仅返回自己负责项目的转写。
+	if actor.Role == constants.RoleInterviewer && projectID == 0 {
+		ownIDs, err := s.projectRepo.ListIDsByCreator(actor.ID)
+		if err != nil {
+			return nil, util.NewAppError(constants.CodeInternal, "查询负责项目失败", err)
+		}
+		own := make(map[uint]bool, len(ownIDs))
+		for _, id := range ownIDs {
+			own[id] = true
+		}
+		filtered := make([]model.Transcript, 0, len(transcripts))
+		for _, t := range transcripts {
+			if own[t.ProjectID] {
+				filtered = append(filtered, t)
+			}
+		}
+		transcripts = filtered
 	}
 	return transcripts, nil
 }
 
 func (s *transcriptService) SaveSegments(actor *model.User, id uint, inputs []dto.TranscriptSegmentInput) (*model.Transcript, error) {
-	transcript, err := s.Get(id)
+	transcript, err := s.get(id)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +313,7 @@ func (s *transcriptService) SaveSegments(actor *model.User, id uint, inputs []dt
 }
 
 func (s *transcriptService) Submit(actor *model.User, id uint) (*model.Transcript, error) {
-	transcript, err := s.Get(id)
+	transcript, err := s.get(id)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +332,7 @@ func (s *transcriptService) Submit(actor *model.User, id uint) (*model.Transcrip
 }
 
 func (s *transcriptService) ConfirmSegment(actor *model.User, id, segmentID uint) (*model.Transcript, error) {
-	transcript, err := s.Get(id)
+	transcript, err := s.get(id)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +354,7 @@ func (s *transcriptService) ConfirmSegment(actor *model.User, id, segmentID uint
 }
 
 func (s *transcriptService) Approve(actor *model.User, id uint) (*model.Transcript, error) {
-	transcript, err := s.Get(id)
+	transcript, err := s.get(id)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +377,7 @@ func (s *transcriptService) Reject(actor *model.User, id uint, reason string) (*
 	if reason == "" {
 		return nil, util.NewAppError(constants.CodeValidation, "退回必须写明问题", nil)
 	}
-	transcript, err := s.Get(id)
+	transcript, err := s.get(id)
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +409,7 @@ func (s *transcriptService) Search(actor *model.User, keyword string, projectID 
 
 // Export 导出已通过转写稿全文（纯文本，按时间轴排列）。
 func (s *transcriptService) Export(actor *model.User, id uint) (string, *model.Transcript, error) {
-	transcript, err := s.Get(id)
+	transcript, err := s.get(id)
 	if err != nil {
 		return "", nil, err
 	}
